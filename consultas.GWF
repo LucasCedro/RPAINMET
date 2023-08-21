@@ -1,0 +1,292 @@
+"REM WORKSPACETAB0",SQL,,235
+select * from weather_data
+where cd_estacao = 'A001'
+order by 4, 1;
+update weather_data set data = '12/31/2015';
+
+SELECT *
+FROM weather_data;
+
+drop table weather_data;
+
+
+select cd_estacao
+from weather_data
+group by cd_estacao
+having count(*) > 1;
+update weather_data set data = '12/31/2015';
+
+CREATE TABLE weather_data (
+    data DATE,
+    hora VARCHAR(4),
+    cd_estacao VARCHAR(4),
+    dc_nome VARCHAR(255),
+    temperatura_media DECIMAL(7,2),
+    temperatura_maxima DECIMAL(7,2),
+    temperatura_minima DECIMAL(7,2),
+    umidade_relativa_media DECIMAL(7,2),
+    umidade_relativa_maxima DECIMAL(7,2),
+    umidade_relativa_minima DECIMAL(7,2),
+    ponto_orvalho_medio DECIMAL(7,2),
+    ponto_orvalho_maximo DECIMAL(7,2),
+    ponto_orvalho_minimo DECIMAL(7,2),
+    pressao_atmosferica_media DECIMAL(7,2),
+    pressao_atmosferica_maxima DECIMAL(7,2),
+    pressao_atmosferica_minima DECIMAL(7,2),
+    vento_velocidade_horaria DECIMAL(7,2),
+    vento_direcao_horaria DECIMAL(7,2),
+    rajada_vento DECIMAL(7,2),
+    radiacao_global DECIMAL(7,2),
+    precipitacao DECIMAL(7,2)
+);
+
+ALTER TABLE weather_data
+ADD CONSTRAINT pk_weather_data PRIMARY KEY (cd_estacao, data, hora);
+
+CREATE INDEX idx_weather_data_cd_estacao
+ON weather_data(cd_estacao);
+
+CREATE INDEX idx_weather_data_data
+ON weather_data(data);
+
+DROP INDEX IF EXISTS pk_weather_data;
+DROP INDEX IF EXISTS idx_weather_data_cd_estacao;
+DROP INDEX IF EXISTS idx_weather_data_data;
+
+-- Lista todos os índices de uma tabela
+SELECT 'DROP INDEX IF EXISTS ' || indexname || ';'
+FROM pg_indexes
+WHERE tablename = 'weather_data';
+
+-- Lista todas as chaves primárias de uma tabela
+SELECT 'ALTER TABLE ' || t.relname || ' DROP CONSTRAINT IF EXISTS ' || c.conname || ';'
+FROM pg_constraint c
+JOIN pg_class t ON c.conrelid = t.oid
+WHERE t.relname = 'weather_data' AND c.contype = 'p';
+
+
+
+
+truncate weather_data;
+
+SELECT data, hora, cd_estacao, dc_nome,
+      temperatura_media, temperatura_maxima, temperatura_minima, umidade_relativa_media, umidade_relativa_maxima, umidade_relativa_minima,
+      ponto_orvalho_medio, ponto_orvalho_maximo, ponto_orvalho_minimo, pressao_atmosferica_media, pressao_atmosferica_maxima,
+      pressao_atmosferica_minima, vento_direcao_horaria, vento_velocidade_horaria, rajada_vento, radiacao_global, precipitacao
+FROM weather_data;
+
+
+WITH station_dates AS (
+    SELECT
+        cd_estacao,
+        MIN(data) as start_date,
+        MAX(data) as end_date
+    FROM weather_data
+    --WHERE cd_estacao = 'A337'
+    GROUP BY cd_estacao
+), all_times AS (
+    SELECT
+        cd_estacao,
+        generate_series(
+            start_date::timestamp,
+            end_date::timestamp + interval '23 hours',
+            '1 hour'::interval
+        ) AS full_time
+    FROM station_dates
+), combined AS (
+    SELECT
+        all_times.full_time::date AS date,
+        LPAD((EXTRACT(HOUR FROM all_times.full_time)::INT * 100)::TEXT, 4, '0') AS hour,
+        all_times.cd_estacao
+    FROM all_times
+)
+SELECT
+    combined.date,
+    combined.hour,
+    combined.cd_estacao
+FROM combined
+LEFT JOIN weather_data ON
+    combined.date = weather_data.data AND
+    combined.hour = weather_data.hora AND
+    combined.cd_estacao = weather_data.cd_estacao
+WHERE weather_data.data IS NULL;
+
+WITH station_dates AS (
+    SELECT
+        cd_estacao,
+        MIN(data) as start_date,
+        MAX(data) as end_date
+    FROM weather_data
+    --WHERE cd_estacao = 'A337'
+    GROUP BY cd_estacao
+), all_dates AS (
+    SELECT
+        cd_estacao,
+        generate_series(
+            start_date::date,
+            end_date::date,
+            '1 day'::interval
+        ) AS full_date
+    FROM station_dates
+), combined AS (
+    SELECT
+        all_dates.full_date::date AS date,
+        all_dates.cd_estacao
+    FROM all_dates
+)
+SELECT
+    combined.date,
+    combined.cd_estacao
+FROM combined
+LEFT JOIN weather_data ON
+    combined.date = weather_data.data AND
+    combined.cd_estacao = weather_data.cd_estacao
+WHERE weather_data.data IS NULL;
+
+
+WITH station_dates AS (
+    SELECT
+        wd.cd_estacao,
+        e."Nome",
+        MIN(wd.data) as start_date,
+        MAX(wd.data) as end_date
+    FROM weather_data wd
+    JOIN estacoes e ON wd.cd_estacao = e."Código"
+    GROUP BY wd.cd_estacao, e."Nome"
+), all_dates AS (
+    SELECT
+        sd.cd_estacao,
+        sd."Nome",
+        generate_series(
+            sd.start_date::date,
+            sd.end_date::date,
+            '1 day'::interval
+        ) AS full_date
+    FROM station_dates sd
+), combined AS (
+    SELECT
+        ad.full_date::date AS date,
+        ad.cd_estacao,
+        ad."Nome"
+    FROM all_dates ad
+)
+SELECT
+    combined.date,
+    combined.cd_estacao,
+    combined."Nome"
+FROM combined
+LEFT JOIN weather_data wd ON
+    combined.date = wd.data AND
+    combined.cd_estacao = wd.cd_estacao
+WHERE wd.data IS NULL;
+
+
+
+SELECT cd_estacao, data, hora, COUNT(*)
+FROM weather_data
+GROUP BY cd_estacao, data, hora
+HAVING COUNT(*) > 1;
+
+
+
+
+
+select count(*)
+from weather_data;
+
+--delete from weather_data where cd_estacao = 'A337' and data = '02/01/2016' and hora = '1400';
+
+
+SELECT
+  '[' || "Nome" || ' (' || "Código" || ')' || ']' || E'\n' ||
+  'estacao = ' || "Nome" || ' (' || "Código" || ')' || E'\n' ||
+  'cod_estacao = ' || "Código" || E'\n' ||
+  'data_ultima_att = ' || TO_CHAR(GREATEST("Data de Instalação", TO_DATE('01/01/2016', 'DD/MM/YYYY')), 'DD/MM/YYYY') || E'\n' as output
+FROM
+  estacoes;
+
+SELECT
+  e."Código" AS "Código",
+  e."Nome" AS "Nome",
+  '[' || e."Nome" || ' (' || e."Código" || ')' || ']' || E'\n' ||
+  'estacao = ' || e."Nome" || ' (' || e."Código" || ')' || E'\n' ||
+  'cod_estacao = ' || e."Código" || E'\n' ||
+  'data_ultima_att = ' || COALESCE(TO_CHAR(wd.max_data, 'DD/MM/YYYY'), '31/12/2015') || E'\n' as output
+FROM
+  estacoes e
+LEFT JOIN (
+  SELECT
+    cd_estacao,
+    MAX(data) as max_data
+  FROM
+    weather_data
+  GROUP BY
+    cd_estacao
+) wd ON e."Código" = wd.cd_estacao
+ORDER BY 3;
+;
+
+
+select c
+from estacoes
+where "Código" = 'A308'
+order by 1;
+select * from weather_data;
+
+
+"REM WORKSPACETAB1",Query3,,10
+SELECT relname AS "Nome da Tabela", pg_size_pretty(pg_total_relation_size(relid)) AS "Tamanho Total",
+       pg_size_pretty(pg_relation_size(relid)) AS "Tamanho da Tabela",
+       pg_size_pretty(pg_indexes_size(relid)) AS "Tamanho dos Índices"
+FROM pg_catalog.pg_statio_user_tables
+ORDER BY pg_total_relation_size(relid) DESC;
+
+SELECT pg_size_pretty(pg_database_size(current_database())) AS "Tamanho do Banco de Dados";
+
+
+
+"REM WORKSPACETAB2","View Materializada",,44
+CREATE MATERIALIZED VIEW vw_weather_data_mes AS
+SELECT
+    TO_CHAR(a.data, 'YYYY/MM') AS ano_mes,
+    a.cd_estacao, a.dc_nome AS nome_estacao, b."Situação" AS situacao,
+    ROUND(AVG(a.temperatura_media), 1) AS temperatura_media,
+    ROUND(AVG(a.temperatura_maxima), 1) AS temperatura_maxima,
+    ROUND(AVG(a.temperatura_minima), 1) AS temperatura_minima,
+    ROUND(AVG(a.umidade_relativa_media), 1) AS umidade_relativa_media,
+    ROUND(AVG(a.umidade_relativa_maxima), 1) AS umidade_relativa_maxima,
+    ROUND(AVG(a.umidade_relativa_minima), 1) AS umidade_relativa_minima,
+    ROUND(AVG(a.ponto_orvalho_medio), 1) AS ponto_orvalho_medio,
+    ROUND(AVG(a.ponto_orvalho_maximo), 1) AS ponto_orvalho_maximo,
+    ROUND(AVG(a.ponto_orvalho_minimo), 1) AS ponto_orvalho_minimo,
+    ROUND(AVG(a.pressao_atmosferica_media), 1) AS pressao_atmosferica_media,
+    ROUND(AVG(a.pressao_atmosferica_maxima), 1) AS pressao_atmosferica_maxima,
+    ROUND(AVG(a.pressao_atmosferica_minima), 1) AS pressao_atmosferica_minima,
+    ROUND(AVG(a.vento_direcao_horaria), 1) AS vento_direcao_horaria,
+    ROUND(AVG(a.vento_velocidade_horaria), 1) AS vento_velocidade_horaria,
+    ROUND(AVG(a.rajada_vento), 1) AS rajada_vento,
+    ROUND(AVG(a.radiacao_global), 1) AS radiacao_global,
+    ROUND(SUM(a.precipitacao), 1) AS soma_precipitacao
+FROM
+    weather_data a,
+    estacoes b
+where a.cd_estacao = b."Código"
+GROUP BY
+    ano_mes, cd_estacao, nome_estacao, situacao;
+
+CREATE INDEX vw_weather_data_mes_ano_mes_idx ON vw_weather_data_mes (ano_mes);
+CREATE INDEX vw_weather_data_mes_cd_estacao_idx ON vw_weather_data_mes (cd_estacao);
+
+REFRESH MATERIALIZED VIEW vw_weather_data_mes;
+REFRESH MATERIALIZED VIEW CONCURRENTLY vw_weather_data_mes;
+DROP MATERIALIZED VIEW vw_weather_data_mes;
+VACUUM FULL VERBOSE ANALYZE weather_data;
+
+
+SELECT relname AS view_name,
+       last_vacuum
+FROM   pg_stat_all_tables
+WHERE  relname = 'vw_weather_data_mes';
+
+select * from vw_weather_data_mes
+
